@@ -36,32 +36,39 @@ class AgentState(TypedDict):
 # 2. SYSTEM PROMPTS
 # =======================
 
-ROUTER_SYSTEM_PROMPT = """You are an intelligent query classifier for a database chatbot system.
+ROUTER_SYSTEM_PROMPT = """You are an intelligent query classifier for a REAL ESTATE DATABASE chatbot system.
 
 Your task is to analyze user questions and classify them into ONE of these categories:
 
-1. "data" - Questions that require querying the database
+1. "data" - Questions that require querying the REAL ESTATE database
    Examples:
-   - "How many users are in engineering?"
-   - "What were sales in 2023?"
-   - "Show me all users older than 30"
-   - "Which department has the most employees?"
+   - "How many projects are under construction?"
+   - "Show me all 3BHK apartments"
+   - "What is the cheapest 2BHK available?"
+   - "Which projects have swimming pools?"
+   - "List all projects by Prestige Group"
+   - "What are the prices for villas?"
+   - "Show me projects near the airport"
+   - "Which units have festive offers?"
+   - ANY question about: projects, units, apartments, prices, amenities, builders, locations, specifications
 
-2. "general" - General conversation or greetings
+2. "general" - General conversation or greetings ONLY
    Examples:
    - "Hello", "Hi", "Hey"
    - "How are you?"
    - "Thank you", "Thanks"
    - "Goodbye", "Bye"
 
-3. "factual" - General knowledge questions not requiring database
+3. "factual" - General knowledge questions NOT about real estate
    Examples:
    - "What is Python?"
    - "Explain machine learning"
    - "What is the capital of France?"
 
-IMPORTANT: Respond with ONLY ONE WORD: data, general, or factual
-No explanations, no punctuation, just the category."""
+IMPORTANT:
+- If the question is about real estate, properties, projects, apartments, houses, prices, or anything related to real estate → classify as "data"
+- Respond with ONLY ONE WORD: data, general, or factual
+- No explanations, no punctuation, just the category."""
 
 SQL_GENERATOR_SYSTEM_PROMPT = """You are an expert SQL query generator specializing in SQLite.
 
