@@ -130,7 +130,10 @@ for message in st.session_state.messages:
 
 # Chat input
 if prompt := st.chat_input("Ask about real estate projects..."):
-    # Add user message to chat
+    # Add user message to chat history FIRST for context
+    st.session_state.chat_history.append({"role": "user", "content": prompt})
+
+    # Add user message to display
     st.session_state.messages.append({"role": "user", "content": prompt})
 
     # Display user message
@@ -182,6 +185,12 @@ if prompt := st.chat_input("Ask about real estate projects..."):
                             "content": response,
                             "model": model_id,
                             "model_display": model_display
+                        })
+
+                        # Update chat history for context
+                        st.session_state.chat_history.append({
+                            "role": "assistant",
+                            "content": response
                         })
 
                     except Exception as e:
@@ -240,6 +249,12 @@ if prompt := st.chat_input("Ask about real estate projects..."):
                         "model_display": model_display
                     })
 
+                    # Update chat history for context
+                    st.session_state.chat_history.append({
+                        "role": "assistant",
+                        "content": response
+                    })
+
                 except Exception as e:
                     error_msg = f"Error: {str(e)}"
                     st.error(error_msg)
@@ -250,10 +265,8 @@ if prompt := st.chat_input("Ask about real estate projects..."):
                         "model_display": model_display
                     })
 
-    # Update chat history for context
-    st.session_state.chat_history.append({"role": "user", "content": prompt})
-    # Keep only last 5 messages for context
-    st.session_state.chat_history = st.session_state.chat_history[-5:]
+    # Keep only last 10 exchanges (20 messages) for context
+    st.session_state.chat_history = st.session_state.chat_history[-20:]
 
 # Footer
 st.markdown("---")
