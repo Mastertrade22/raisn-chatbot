@@ -12,6 +12,9 @@ from dotenv import load_dotenv
 from langgraph.graph import StateGraph, END
 from real_estate_db import create_real_estate_db
 
+# Get absolute path to database file
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "real_estate_data.db")
+
 # Load environment variables
 load_dotenv()
 
@@ -152,8 +155,73 @@ class OpenRouterLLM:
 # =======================
 
 def get_database_schema():
-    """Get the database schema for SQL generation"""
-    return create_real_estate_db()
+    """Get the database schema for SQL generation - only creates DB if it doesn't exist"""
+    # Only create database if it doesn't exist
+    if not os.path.exists(DB_PATH):
+        print("📁 Database not found, creating...")
+        schema_text = create_real_estate_db()
+        return schema_text
+
+    # Return complete schema for existing database
+    return """
+DATABASE: real_estate_data.db
+
+TABLE: projects
+Columns:
+- project_id (TEXT PRIMARY KEY)
+- tenant_id (TEXT NOT NULL)
+- project_name (TEXT NOT NULL) - Name of the real estate project
+- developer_name (TEXT NOT NULL) - Builder/developer name
+- city (TEXT NOT NULL)
+- description (TEXT)
+- total_project_area_acres (DECIMAL)
+- open_space_percentage (DECIMAL)
+- number_of_towers (INTEGER)
+- total_units_count (INTEGER)
+- tower_structure_details (TEXT)
+- is_block_wing_structure (BOOLEAN)
+- rera_registration_number (TEXT)
+- approval_body (TEXT)
+- launch_date, sales_launch_date, construction_start_date (DATE)
+- rera_possession_date, estimated_possession_date (DATE)
+- construction_status (VARCHAR) - Values: 'Under Construction', 'Completed', 'Ready to Move'
+- completion_percentage (DECIMAL)
+- construction_technology (TEXT)
+- stamp_duty_percentage, registration_charges_percentage (DECIMAL)
+- construction_partners (TEXT)
+- amenities, payment_plans, unique_selling_propositions (TEXT - JSON)
+- schools, colleges, hospitals, it_parks_companies (TEXT)
+- nearby_top_places, shopping_malls, health_fitness (TEXT)
+- connecting_roads, metro_stations, bus_stands, airport_distance (TEXT)
+- created_at, modified_at (TIMESTAMP)
+
+TABLE: project_units
+Columns:
+- unit_id (TEXT PRIMARY KEY)
+- project_id (TEXT - FOREIGN KEY to projects.project_id)
+- tenant_id (TEXT NOT NULL)
+- configuration_type (VARCHAR) - Examples: '2BHK', '3BHK', '4BHK', 'Villa'
+- property_type (VARCHAR) - Examples: 'Apartment', 'Villa', 'Penthouse'
+- built_up_area_sqft (DECIMAL)
+- carpet_area_sqft (DECIMAL)
+- base_price (DECIMAL) - Price in currency
+- current_average_psf (DECIMAL) - Price per square foot
+- market_psf (DECIMAL)
+- view_premium_details, high_floor_premium_details, corner_unit_premium_details (TEXT)
+- last_price_revision_date, next_planned_revision_date (DATE)
+- last_price_change_percentage (DECIMAL)
+- current_festive_offers (TEXT)
+- created_at (TIMESTAMP)
+
+IMPORTANT SQL GUIDELINES:
+- Use JOIN to combine project and unit information
+- For project queries: SELECT * FROM projects WHERE ...
+- For unit queries: SELECT * FROM project_units WHERE ...
+- For combined queries: SELECT p.project_name, u.* FROM projects p JOIN project_units u ON p.project_id = u.project_id WHERE ...
+- Configuration type pattern matching: WHERE configuration_type LIKE '%3BHK%'
+- Count projects: SELECT COUNT(*) FROM projects
+- Count units: SELECT COUNT(*) FROM project_units
+"""
 
 
 # =======================
@@ -202,6 +270,8 @@ Classification:"""
         # Default to DATA query on error (not general)
         return {
             "query_type": "data",
+            "sql_query": "",
+            "sql_result": "",
             "error": f"Router error: {str(e)}"
         }
 
@@ -250,12 +320,15 @@ SQL query:"""
 
         return {
             "sql_query": sql_query,
+            "sql_result": "",  # Clear previous results
             "error": ""  # Clear previous errors
         }
 
     except Exception as e:
         print(f"[{state['model_name']}] ❌ SQL Generation error: {str(e)}")
         return {
+            "sql_query": "",  # Clear failed query
+            "sql_result": "",  # Clear any old results
             "error": f"SQL generation failed: {str(e)}",
             "retry_count": state.get('retry_count', 0) + 1
         }
@@ -269,7 +342,7 @@ def execute_sql_node(state: AgentState) -> dict:
     print(f"[{state['model_name']}] 🗄️  Executing SQL...")
 
     try:
-        conn = sqlite3.connect("real_estate_data.db")
+        conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute(state['sql_query'])
         results = cursor.fetchall()
@@ -280,6 +353,7 @@ def execute_sql_node(state: AgentState) -> dict:
 
         return {
             "sql_result": sql_result,
+            "sql_query": state['sql_query'],  # Preserve the successful query
             "error": "",
             "retry_count": 0
         }
@@ -290,6 +364,8 @@ def execute_sql_node(state: AgentState) -> dict:
         print(f"[{state['model_name']}] ❌ SQL Error (attempt {retry_count}): {error_msg}")
 
         return {
+            "sql_result": "",  # Clear results on error
+            "sql_query": state.get('sql_query', ''),  # Preserve query for retry
             "error": error_msg,
             "retry_count": retry_count
         }
@@ -315,24 +391,28 @@ def response_node(state: AgentState) -> dict:
         llm = OpenRouterLLM(state['model_name'])
 
         if state['query_type'] == 'data':
-            # Check if we have valid results
-            if not state.get('sql_result'):
+            # Validate we have both sql_query and sql_result
+            sql_query = state.get('sql_query', '').strip()
+            sql_result = state.get('sql_result', '').strip()
+
+            if not sql_query or not sql_result:
                 return {
                     "final_answer": "I couldn't retrieve the data you requested. "
+                                   "There was an issue generating or executing the database query. "
                                    "Please try rephrasing your question or ask something else."
                 }
 
             prompt = f"""User question: {state['question']}
 
-SQL Query executed: {state['sql_query']}
-Results: {state['sql_result']}
+SQL Query executed: {sql_query}
+Results: {sql_result}
 
 Provide a clear, concise answer:"""
 
             final_answer = llm.invoke(prompt, RESPONSE_SYSTEM_PROMPT)
 
         else:
-            # General or factual conversation
+            # General conversation (greetings only)
             final_answer = llm.invoke(state['question'], GENERAL_CONVERSATION_PROMPT)
 
         print(f"[{state['model_name']}] ✅ Response generated")
@@ -352,7 +432,7 @@ Provide a clear, concise answer:"""
 # 6. CONDITIONAL LOGIC
 # =======================
 
-def route_query(state: AgentState) -> Literal["sql_gen", "response", "end"]:
+def route_query(state: AgentState) -> Literal["sql_gen", "response"]:
     """Determines where to go after the router"""
     if state['query_type'] == 'data':
         return "sql_gen"
