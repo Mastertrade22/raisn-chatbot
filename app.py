@@ -36,39 +36,19 @@ class AgentState(TypedDict):
 # 2. SYSTEM PROMPTS
 # =======================
 
-ROUTER_SYSTEM_PROMPT = """You are an intelligent query classifier for a REAL ESTATE DATABASE chatbot system.
+ROUTER_SYSTEM_PROMPT = """You classify queries for a real estate database chatbot.
 
-Your task is to analyze user questions and classify them into ONE of these categories:
+ONLY TWO OPTIONS:
 
-1. "data" - Questions that require querying the REAL ESTATE database
-   Examples:
-   - "How many projects are under construction?"
-   - "Show me all 3BHK apartments"
-   - "What is the cheapest 2BHK available?"
-   - "Which projects have swimming pools?"
-   - "List all projects by Prestige Group"
-   - "What are the prices for villas?"
-   - "Show me projects near the airport"
-   - "Which units have festive offers?"
-   - ANY question about: projects, units, apartments, prices, amenities, builders, locations, specifications
+1. "general" - ONLY for greetings: "hello", "hi", "hey", "bye", "thank you", "thanks"
 
-2. "general" - General conversation or greetings ONLY
-   Examples:
-   - "Hello", "Hi", "Hey"
-   - "How are you?"
-   - "Thank you", "Thanks"
-   - "Goodbye", "Bye"
+2. "data" - EVERYTHING ELSE (default)
 
-3. "factual" - General knowledge questions NOT about real estate
-   Examples:
-   - "What is Python?"
-   - "Explain machine learning"
-   - "What is the capital of France?"
+If the question mentions: projects, properties, apartments, units, BHK, prices, builders, amenities, locations, construction, or ANYTHING real estate related → MUST be "data"
 
-IMPORTANT:
-- If the question is about real estate, properties, projects, apartments, houses, prices, or anything related to real estate → classify as "data"
-- Respond with ONLY ONE WORD: data, general, or factual
-- No explanations, no punctuation, just the category."""
+If you're unsure → classify as "data"
+
+Respond with ONLY ONE WORD: data OR general"""
 
 SQL_GENERATOR_SYSTEM_PROMPT = """You are an expert SQL query generator specializing in SQLite.
 
@@ -98,17 +78,13 @@ RULES:
 
 Keep responses clear, concise, and user-friendly."""
 
-GENERAL_CONVERSATION_PROMPT = """You are a friendly, helpful assistant integrated into a database chatbot.
+GENERAL_CONVERSATION_PROMPT = """You are a friendly assistant for a real estate database chatbot.
 
-Your task is to respond naturally to general conversation and greetings.
+Respond ONLY to greetings like "hello", "hi", "thank you", "bye".
 
-RULES:
-1. Be warm and professional
-2. Keep responses brief and friendly
-3. You can mention you're a database assistant if relevant
-4. Don't make up information
+For ANY real estate questions, say: "Let me check the database for you."
 
-Be natural and conversational."""
+Be brief and warm."""
 
 # =======================
 # 3. OPENROUTER LLM CLIENT
@@ -210,13 +186,12 @@ Classification:"""
 
         classification = llm.invoke(prompt, ROUTER_SYSTEM_PROMPT).strip().lower()
 
-        # Extract just the classification word
-        if "data" in classification:
-            query_type = "data"
-        elif "general" in classification:
+        # Extract just the classification word - default to "data" for everything except greetings
+        if "general" in classification:
             query_type = "general"
         else:
-            query_type = "factual"
+            # Force everything else to be a data query
+            query_type = "data"
 
         print(f"[{state['model_name']}] ✅ Classified as: {query_type}")
 
@@ -224,9 +199,9 @@ Classification:"""
 
     except Exception as e:
         print(f"[{state['model_name']}] ❌ Router error: {str(e)}")
-        # Default to general conversation on error
+        # Default to DATA query on error (not general)
         return {
-            "query_type": "general",
+            "query_type": "data",
             "error": f"Router error: {str(e)}"
         }
 
