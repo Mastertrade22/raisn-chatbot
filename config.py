@@ -56,6 +56,31 @@ MAX_SQL_RETRIES = 2
 MAX_CHAT_HISTORY = 20  # Keep last 20 messages for context
 RECENT_HISTORY_FOR_ROUTER = 3  # Use last 3 messages for query classification
 
+# =======================
+# CLIENT/TENANT CONFIGURATIONS
+# =======================
+
+# Available clients (tenants) for POC - in production, this comes from backend
+AVAILABLE_CLIENTS = {
+    "all": {
+        "id": None,  # None means no filtering
+        "display_name": "All Clients",
+        "description": "View all projects across all clients"
+    },
+    "casagrand": {
+        "id": "TM_TEAM_001",
+        "display_name": "Casagrand",
+        "description": "Casagrand projects"
+    },
+    "purvankara": {
+        "id": "PURVA_001",
+        "display_name": "Purvankara",
+        "description": "Purva/Purvankara projects"
+    }
+}
+
+DEFAULT_CLIENT = "all"  # Default to showing all clients
+
 
 # =======================
 # SYSTEM PROMPTS
@@ -87,6 +112,18 @@ RULES:
 4. For counting queries, use COUNT(*)
 5. For filtering, use WHERE clauses appropriately
 6. If you receive an error, analyze it carefully and fix the issue
+
+CRITICAL PATTERN MATCHING RULES (CASE-INSENSITIVE):
+- ALWAYS use LIKE with wildcards for text matching (developer_name, project_name, client names)
+- NEVER use = (equals) for developer names, project names, or client names
+- ALWAYS make text searches CASE-INSENSITIVE using UPPER() or LOWER()
+- Examples:
+  * For "Casagrand projects": WHERE UPPER(developer_name) LIKE '%CASAGRAND%'
+  * For "Purva projects": WHERE UPPER(developer_name) LIKE '%PURVA%' OR UPPER(project_name) LIKE '%PURVA%'
+  * For "Brigade": WHERE UPPER(developer_name) LIKE '%BRIGADE%'
+  * For "3bhk units": WHERE UPPER(configuration_type) LIKE '%3BHK%'
+- Use UPPER() for case-insensitive matching to handle "casagrand", "Casagrand", "CASAGRAND"
+- Use = (equals) ONLY for exact matches like IDs, numeric values, or specific status values
 
 IMPORTANT: Output ONLY the SQL query, nothing else."""
 

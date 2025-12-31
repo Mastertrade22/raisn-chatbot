@@ -8,7 +8,7 @@ from typing import List
 import os
 
 from chatbot_core import create_chatbot
-from config import AVAILABLE_MODELS, validate_config
+from config import AVAILABLE_MODELS, AVAILABLE_CLIENTS, DEFAULT_CLIENT, validate_config
 from database import db_interface
 
 # Page configuration
@@ -60,18 +60,26 @@ if "chatbot_qwen" not in st.session_state:
 if "chatbot_deepseek" not in st.session_state:
     st.session_state.chatbot_deepseek = None
 
+if "selected_client" not in st.session_state:
+    st.session_state.selected_client = DEFAULT_CLIENT
+
 
 def initialize_chatbots():
     """Initialize chatbot instances"""
     try:
+        # Get current tenant_id
+        tenant_id = AVAILABLE_CLIENTS.get(st.session_state.selected_client, {}).get("id")
+
         if st.session_state.chatbot_qwen is None:
             st.session_state.chatbot_qwen = create_chatbot(
-                model_id=AVAILABLE_MODELS["qwen"]["id"]
+                model_id=AVAILABLE_MODELS["qwen"]["id"],
+                tenant_id=tenant_id
             )
 
         if st.session_state.chatbot_deepseek is None:
             st.session_state.chatbot_deepseek = create_chatbot(
-                model_id=AVAILABLE_MODELS["deepseek"]["id"]
+                model_id=AVAILABLE_MODELS["deepseek"]["id"],
+                tenant_id=tenant_id
             )
     except Exception as e:
         st.error(f"Failed to initialize chatbots: {str(e)}")
@@ -90,6 +98,37 @@ with st.sidebar:
         ["Qwen 2.5 (72B)", "DeepSeek V3", "Both (Comparison)"],
         help="Select which AI model to use for responses"
     )
+
+    st.markdown("---")
+
+    # Client selection
+    st.subheader("🏢 Client Filter")
+
+    client_options = {key: config["display_name"] for key, config in AVAILABLE_CLIENTS.items()}
+    selected_client_key = st.selectbox(
+        "Select Client:",
+        options=list(client_options.keys()),
+        format_func=lambda x: client_options[x],
+        index=list(client_options.keys()).index(st.session_state.selected_client),
+        help="Filter projects by client/developer (POC mode - in production, this comes from backend)"
+    )
+
+    # Show client description
+    if selected_client_key in AVAILABLE_CLIENTS:
+        st.caption(AVAILABLE_CLIENTS[selected_client_key]["description"])
+
+    # Update chatbot tenant if changed
+    if selected_client_key != st.session_state.selected_client:
+        st.session_state.selected_client = selected_client_key
+        tenant_id = AVAILABLE_CLIENTS[selected_client_key]["id"]
+
+        # Update both chatbots
+        if st.session_state.chatbot_qwen:
+            st.session_state.chatbot_qwen.set_tenant(tenant_id)
+        if st.session_state.chatbot_deepseek:
+            st.session_state.chatbot_deepseek.set_tenant(tenant_id)
+
+        st.info(f"🔄 Client filter updated to: {AVAILABLE_CLIENTS[selected_client_key]['display_name']}")
 
     st.markdown("---")
 

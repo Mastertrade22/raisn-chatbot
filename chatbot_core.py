@@ -35,6 +35,7 @@ class AgentState(TypedDict):
     error: str                   # Tracks if SQL execution failed (for retries)
     retry_count: int             # Number of SQL retries
     model_name: str              # Which model is being used
+    tenant_id: str               # Client/tenant ID for filtering (None means no filtering)
 
 
 # =======================
@@ -92,7 +93,9 @@ def sql_gen_node(state: AgentState) -> dict:
     try:
         llm = create_llm_client(state['model_name'])
 
-        schema = get_database_schema()
+        # Get schema with tenant filtering if applicable
+        tenant_id = state.get('tenant_id')
+        schema = get_database_schema(tenant_id)
 
         # Enhanced system prompt with schema
         system_prompt_with_schema = f"""{SQL_GENERATOR_SYSTEM_PROMPT}
@@ -299,24 +302,27 @@ class RealEstateChatbot:
     Production-ready chatbot that can be plugged into any application
     """
 
-    def __init__(self, model_id: str = "qwen/qwen-2.5-72b-instruct"):
+    def __init__(self, model_id: str = "qwen/qwen-2.5-72b-instruct", tenant_id: str = None):
         """
         Initialize the chatbot
 
         Args:
             model_id: The LLM model identifier to use
+            tenant_id: Optional tenant/client ID for filtering (None means no filtering)
         """
         self.model_id = model_id
+        self.tenant_id = tenant_id
         self.graph = create_chatbot_graph(model_id)
         self.chat_history = []
 
-    def ask(self, question: str, preserve_history: bool = True) -> dict:
+    def ask(self, question: str, preserve_history: bool = True, tenant_id: str = None) -> dict:
         """
         Ask a question to the chatbot
 
         Args:
             question: User's question
             preserve_history: Whether to keep chat history for context
+            tenant_id: Optional tenant ID override (uses instance tenant_id if not provided)
 
         Returns:
             dict: Response containing:
@@ -325,6 +331,9 @@ class RealEstateChatbot:
                 - sql_query: SQL query if applicable
                 - error: Error message if any
         """
+        # Use provided tenant_id or fall back to instance tenant_id
+        active_tenant_id = tenant_id if tenant_id is not None else self.tenant_id
+
         # Initial state
         initial_state = {
             "question": question,
@@ -335,7 +344,8 @@ class RealEstateChatbot:
             "final_answer": "",
             "error": "",
             "retry_count": 0,
-            "model_name": self.model_id
+            "model_name": self.model_id,
+            "tenant_id": active_tenant_id
         }
 
         # Run the graph
@@ -354,6 +364,15 @@ class RealEstateChatbot:
             "error": final_state.get('error', '')
         }
 
+    def set_tenant(self, tenant_id: str = None):
+        """
+        Set the tenant/client ID for filtering
+
+        Args:
+            tenant_id: Tenant ID to filter by (None means no filtering)
+        """
+        self.tenant_id = tenant_id
+
     def reset_history(self):
         """Clear chat history"""
         self.chat_history = []
@@ -367,14 +386,15 @@ class RealEstateChatbot:
 # CONVENIENCE FUNCTIONS
 # =======================
 
-def create_chatbot(model_id: str = "qwen/qwen-2.5-72b-instruct") -> RealEstateChatbot:
+def create_chatbot(model_id: str = "qwen/qwen-2.5-72b-instruct", tenant_id: str = None) -> RealEstateChatbot:
     """
     Factory function to create a chatbot instance
 
     Args:
         model_id: The LLM model identifier
+        tenant_id: Optional tenant/client ID for filtering
 
     Returns:
         RealEstateChatbot: Ready-to-use chatbot instance
     """
-    return RealEstateChatbot(model_id=model_id)
+    return RealEstateChatbot(model_id=model_id, tenant_id=tenant_id)

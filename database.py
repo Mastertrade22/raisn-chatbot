@@ -53,20 +53,34 @@ class DatabaseInterface:
         except Exception as e:
             return [], str(e)
 
-    def get_schema(self) -> str:
+    def get_schema(self, tenant_id: Optional[str] = None) -> str:
         """
         Get database schema as formatted string
 
-        Returns:
-            str: Formatted database schema
-        """
-        return """
-DATABASE: real_estate_data.db
+        Args:
+            tenant_id: Optional tenant ID for filtering (None means no filtering)
 
+        Returns:
+            str: Formatted database schema with tenant context
+        """
+        tenant_filter_note = ""
+        if tenant_id:
+            tenant_filter_note = f"""
+IMPORTANT TENANT FILTERING:
+- Current tenant_id: '{tenant_id}'
+- ALWAYS add: WHERE tenant_id = '{tenant_id}' to filter by this specific client
+- For projects table: WHERE tenant_id = '{tenant_id}'
+- For project_units table: WHERE tenant_id = '{tenant_id}'
+- For JOINs: Add tenant_id filter to both tables or the result set
+"""
+
+        return f"""
+DATABASE: real_estate_data.db
+{tenant_filter_note}
 TABLE: projects
 Columns:
 - project_id (TEXT PRIMARY KEY)
-- tenant_id (TEXT NOT NULL)
+- tenant_id (TEXT NOT NULL) - Client/tenant identifier
 - project_name (TEXT NOT NULL) - Name of the real estate project
 - developer_name (TEXT NOT NULL) - Builder/developer name
 - city (TEXT NOT NULL)
@@ -96,7 +110,7 @@ TABLE: project_units
 Columns:
 - unit_id (TEXT PRIMARY KEY)
 - project_id (TEXT - FOREIGN KEY to projects.project_id)
-- tenant_id (TEXT NOT NULL)
+- tenant_id (TEXT NOT NULL) - Client/tenant identifier
 - configuration_type (VARCHAR) - Examples: '2BHK', '3BHK', '4BHK', 'Villa'
 - property_type (VARCHAR) - Examples: 'Apartment', 'Villa', 'Penthouse'
 - built_up_area_sqft (DECIMAL)
@@ -115,6 +129,8 @@ IMPORTANT SQL GUIDELINES:
 - For project queries: SELECT * FROM projects WHERE ...
 - For unit queries: SELECT * FROM project_units WHERE ...
 - For combined queries: SELECT p.project_name, u.* FROM projects p JOIN project_units u ON p.project_id = u.project_id WHERE ...
+- IMPORTANT: Use LIKE for pattern matching on text fields (developer_name, project_name, client names)
+  Example: WHERE developer_name LIKE '%Casagrand%' or WHERE project_name LIKE '%Purva%'
 - Configuration type pattern matching: WHERE configuration_type LIKE '%3BHK%'
 - Count projects: SELECT COUNT(*) FROM projects
 - Count units: SELECT COUNT(*) FROM project_units
@@ -170,14 +186,17 @@ IMPORTANT SQL GUIDELINES:
 db_interface = DatabaseInterface()
 
 
-def get_database_schema() -> str:
+def get_database_schema(tenant_id: Optional[str] = None) -> str:
     """
     Get database schema (convenience function)
+
+    Args:
+        tenant_id: Optional tenant ID for filtering
 
     Returns:
         str: Database schema
     """
-    return db_interface.get_schema()
+    return db_interface.get_schema(tenant_id)
 
 
 def execute_sql(sql_query: str) -> Tuple[List, Optional[str]]:
