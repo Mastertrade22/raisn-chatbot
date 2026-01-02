@@ -25,6 +25,16 @@ AVAILABLE_MODELS = {
         "id": "deepseek/deepseek-chat",
         "display_name": "DeepSeek V3",
         "temperature": 0.3
+    },
+    "deepseek-r1": {
+        "id": "deepseek/deepseek-r1",
+        "display_name": "DeepSeek R1",
+        "temperature": 0.3
+    },
+    "glm4": {
+        "id": "zhipuai/glm-4-9b-chat",
+        "display_name": "GLM-4 (9B)",
+        "temperature": 0.3
     }
 }
 
