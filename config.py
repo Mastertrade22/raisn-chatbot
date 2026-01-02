@@ -64,7 +64,7 @@ DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), DB_NAME)
 
 MAX_SQL_RETRIES = 2
 MAX_CHAT_HISTORY = 20  # Keep last 20 messages for context
-RECENT_HISTORY_FOR_ROUTER = 3  # Use last 3 messages for query classification
+RECENT_HISTORY_FOR_ROUTER = 15  # Use last 15 messages for query classification
 
 # =======================
 # CLIENT/TENANT CONFIGURATIONS
