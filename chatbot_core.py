@@ -9,6 +9,7 @@ from langgraph.graph import StateGraph, END
 
 from llm_client import create_llm_client
 from database import get_database_schema, execute_sql
+from fuzzy_matching import get_fuzzy_matching_context
 from config import (
     ROUTER_SYSTEM_PROMPT,
     SQL_GENERATOR_SYSTEM_PROMPT,
@@ -97,11 +98,15 @@ def sql_gen_node(state: AgentState) -> dict:
         tenant_id = state.get('tenant_id')
         schema = get_database_schema(tenant_id)
 
-        # Enhanced system prompt with schema
+        # Get fuzzy matching context (available cities, projects, developers)
+        fuzzy_context = get_fuzzy_matching_context(tenant_id)
+
+        # Enhanced system prompt with schema and fuzzy matching context
         system_prompt_with_schema = f"""{SQL_GENERATOR_SYSTEM_PROMPT}
 
 DATABASE SCHEMA:
-{schema}"""
+{schema}
+{fuzzy_context}"""
 
         # Build prompt with error feedback if this is a retry
         if state.get('error') and state.get('retry_count', 0) > 0:

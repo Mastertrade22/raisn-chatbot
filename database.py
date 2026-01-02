@@ -181,6 +181,82 @@ IMPORTANT SQL GUIDELINES:
             print(f"Error getting table counts: {e}")
             return {}
 
+    def get_distinct_cities(self) -> List[str]:
+        """
+        Get list of all distinct cities in the database
+
+        Returns:
+            List[str]: List of city names
+        """
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute("SELECT DISTINCT city FROM projects WHERE city IS NOT NULL ORDER BY city")
+            cities = [row[0] for row in cursor.fetchall()]
+            conn.close()
+            return cities
+        except Exception as e:
+            print(f"Error getting cities: {e}")
+            return []
+
+    def get_distinct_developers(self, tenant_id: Optional[str] = None) -> List[str]:
+        """
+        Get list of all distinct developer names in the database
+
+        Args:
+            tenant_id: Optional tenant ID for filtering
+
+        Returns:
+            List[str]: List of developer names
+        """
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+
+            if tenant_id:
+                cursor.execute(
+                    "SELECT DISTINCT developer_name FROM projects WHERE tenant_id = ? AND developer_name IS NOT NULL ORDER BY developer_name",
+                    (tenant_id,)
+                )
+            else:
+                cursor.execute("SELECT DISTINCT developer_name FROM projects WHERE developer_name IS NOT NULL ORDER BY developer_name")
+
+            developers = [row[0] for row in cursor.fetchall()]
+            conn.close()
+            return developers
+        except Exception as e:
+            print(f"Error getting developers: {e}")
+            return []
+
+    def get_distinct_project_names(self, tenant_id: Optional[str] = None) -> List[str]:
+        """
+        Get list of all distinct project names in the database
+
+        Args:
+            tenant_id: Optional tenant ID for filtering
+
+        Returns:
+            List[str]: List of project names
+        """
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+
+            if tenant_id:
+                cursor.execute(
+                    "SELECT DISTINCT project_name FROM projects WHERE tenant_id = ? AND project_name IS NOT NULL ORDER BY project_name",
+                    (tenant_id,)
+                )
+            else:
+                cursor.execute("SELECT DISTINCT project_name FROM projects WHERE project_name IS NOT NULL ORDER BY project_name")
+
+            projects = [row[0] for row in cursor.fetchall()]
+            conn.close()
+            return projects
+        except Exception as e:
+            print(f"Error getting project names: {e}")
+            return []
+
 
 # Singleton instance for easy import
 db_interface = DatabaseInterface()

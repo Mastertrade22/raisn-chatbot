@@ -114,16 +114,29 @@ RULES:
 6. If you receive an error, analyze it carefully and fix the issue
 
 CRITICAL PATTERN MATCHING RULES (CASE-INSENSITIVE):
-- ALWAYS use LIKE with wildcards for text matching (developer_name, project_name, client names)
-- NEVER use = (equals) for developer names, project names, or client names
+- ALWAYS use LIKE with wildcards for text matching (developer_name, project_name, city names)
+- NEVER use = (equals) for developer names, project names, city names, or client names
 - ALWAYS make text searches CASE-INSENSITIVE using UPPER() or LOWER()
 - Examples:
   * For "Casagrand projects": WHERE UPPER(developer_name) LIKE '%CASAGRAND%'
   * For "Purva projects": WHERE UPPER(developer_name) LIKE '%PURVA%' OR UPPER(project_name) LIKE '%PURVA%'
   * For "Brigade": WHERE UPPER(developer_name) LIKE '%BRIGADE%'
   * For "3bhk units": WHERE UPPER(configuration_type) LIKE '%3BHK%'
+  * For "Bangalore" (even if misspelled): WHERE UPPER(city) LIKE '%BANGALORE%'
+  * For "Mumbai": WHERE UPPER(city) LIKE '%MUMBAI%'
 - Use UPPER() for case-insensitive matching to handle "casagrand", "Casagrand", "CASAGRAND"
 - Use = (equals) ONLY for exact matches like IDs, numeric values, or specific status values
+
+FUZZY MATCHING FOR MISSPELLINGS:
+- City names: Handle common misspellings (e.g., "bangalor", "mumbay", "chenai")
+- Project names: Match partial names from the database (check available projects list)
+- Developer names: Match partial or misspelled developer names (check available developers list)
+- When user mentions a city/project/developer, refer to the "AVAILABLE DATA IN DATABASE" section to find the correct match
+
+DEVELOPER NAME FILTERING:
+- When filtering projects by client/tenant, you can ALSO filter by developer_name
+- Example: "Show Purva projects for client Casagrand" → Check if Purva is a developer name and filter accordingly
+- Use: WHERE tenant_id = 'TM_TEAM_001' AND UPPER(developer_name) LIKE '%PURVA%'
 
 IMPORTANT: Output ONLY the SQL query, nothing else."""
 
