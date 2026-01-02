@@ -47,6 +47,10 @@ st.markdown("""
         background-color: #8b5cf6;
         color: white;
     }
+    .glm-badge {
+        background-color: #10b981;
+        color: white;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -54,33 +58,26 @@ st.markdown("""
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-if "chatbot_qwen" not in st.session_state:
-    st.session_state.chatbot_qwen = None
-
-if "chatbot_deepseek" not in st.session_state:
-    st.session_state.chatbot_deepseek = None
+if "chatbots" not in st.session_state:
+    st.session_state.chatbots = {}
 
 if "selected_client" not in st.session_state:
     st.session_state.selected_client = DEFAULT_CLIENT
 
 
 def initialize_chatbots():
-    """Initialize chatbot instances"""
+    """Initialize chatbot instances for all available models"""
     try:
         # Get current tenant_id
         tenant_id = AVAILABLE_CLIENTS.get(st.session_state.selected_client, {}).get("id")
 
-        if st.session_state.chatbot_qwen is None:
-            st.session_state.chatbot_qwen = create_chatbot(
-                model_id=AVAILABLE_MODELS["qwen"]["id"],
-                tenant_id=tenant_id
-            )
-
-        if st.session_state.chatbot_deepseek is None:
-            st.session_state.chatbot_deepseek = create_chatbot(
-                model_id=AVAILABLE_MODELS["deepseek"]["id"],
-                tenant_id=tenant_id
-            )
+        # Initialize all available models
+        for model_key, model_config in AVAILABLE_MODELS.items():
+            if model_key not in st.session_state.chatbots:
+                st.session_state.chatbots[model_key] = create_chatbot(
+                    model_id=model_config["id"],
+                    tenant_id=tenant_id
+                )
     except Exception as e:
         st.error(f"Failed to initialize chatbots: {str(e)}")
 
@@ -93,10 +90,15 @@ with st.sidebar:
     # Model selection
     st.subheader("⚙️ Settings")
 
-    selected_model = st.radio(
-        "Choose AI Model:",
-        ["Qwen 2.5 (72B)", "DeepSeek V3", "Both (Comparison)"],
-        help="Select which AI model to use for responses"
+    # Create model options from AVAILABLE_MODELS
+    model_display_to_key = {config["display_name"]: key for key, config in AVAILABLE_MODELS.items()}
+    model_options = list(model_display_to_key.keys())
+
+    selected_models = st.multiselect(
+        "Choose AI Model(s):",
+        model_options,
+        default=[model_options[0]] if model_options else [],
+        help="Select one or more AI models to compare responses"
     )
 
     st.markdown("---")
@@ -122,11 +124,10 @@ with st.sidebar:
         st.session_state.selected_client = selected_client_key
         tenant_id = AVAILABLE_CLIENTS[selected_client_key]["id"]
 
-        # Update both chatbots
-        if st.session_state.chatbot_qwen:
-            st.session_state.chatbot_qwen.set_tenant(tenant_id)
-        if st.session_state.chatbot_deepseek:
-            st.session_state.chatbot_deepseek.set_tenant(tenant_id)
+        # Update all chatbots
+        for chatbot in st.session_state.chatbots.values():
+            if chatbot:
+                chatbot.set_tenant(tenant_id)
 
         st.info(f"🔄 Client filter updated to: {AVAILABLE_CLIENTS[selected_client_key]['display_name']}")
 
@@ -175,10 +176,9 @@ with st.sidebar:
     # Clear chat button
     if st.button("🗑️ Clear Chat", use_container_width=True):
         st.session_state.messages = []
-        if st.session_state.chatbot_qwen:
-            st.session_state.chatbot_qwen.reset_history()
-        if st.session_state.chatbot_deepseek:
-            st.session_state.chatbot_deepseek.reset_history()
+        for chatbot in st.session_state.chatbots.values():
+            if chatbot:
+                chatbot.reset_history()
         st.rerun()
 
     st.markdown("---")
@@ -191,12 +191,25 @@ st.markdown("Ask questions about real estate projects, pricing, availability, an
 # Initialize chatbots
 initialize_chatbots()
 
+# Helper function to get model color
+def get_model_color(model_name):
+    """Get badge color based on model name"""
+    model_lower = model_name.lower()
+    if "qwen" in model_lower:
+        return "qwen-badge"
+    elif "deepseek" in model_lower:
+        return "deepseek-badge"
+    elif "glm" in model_lower:
+        return "glm-badge"
+    else:
+        return "qwen-badge"  # Default color
+
 # Display chat messages
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         if message["role"] == "assistant" and "model" in message:
             # Display model badge for assistant messages
-            model_color = "qwen-badge" if "qwen" in message["model"].lower() else "deepseek-badge"
+            model_color = get_model_color(message.get("model_display", ""))
             st.markdown(f'<div class="model-badge {model_color}">{message["model_display"]}</div>', unsafe_allow_html=True)
         st.markdown(message["content"])
 
@@ -215,19 +228,23 @@ if prompt := st.chat_input("Ask about real estate projects..."):
         st.markdown(prompt)
 
     # Process with selected model(s)
-    if selected_model == "Both (Comparison)":
-        # Compare both models
-        chatbots = {
-            "Qwen 2.5 (72B)": st.session_state.chatbot_qwen,
-            "DeepSeek V3": st.session_state.chatbot_deepseek
-        }
+    if not selected_models:
+        st.warning("⚠️ Please select at least one model to continue")
+    else:
+        # Process each selected model
+        for model_display in selected_models:
+            model_key = model_display_to_key.get(model_display)
+            if not model_key or model_key not in st.session_state.chatbots:
+                st.error(f"Model {model_display} not initialized")
+                continue
 
-        for model_name, chatbot in chatbots.items():
+            chatbot = st.session_state.chatbots[model_key]
+
             with st.chat_message("assistant"):
-                model_color = "qwen-badge" if "qwen" in model_name.lower() else "deepseek-badge"
-                st.markdown(f'<div class="model-badge {model_color}">{model_name}</div>', unsafe_allow_html=True)
+                model_color = get_model_color(model_display)
+                st.markdown(f'<div class="model-badge {model_color}">{model_display}</div>', unsafe_allow_html=True)
 
-                with st.spinner(f"Thinking with {model_name}..."):
+                with st.spinner(f"Thinking with {model_display}..."):
                     try:
                         # Get response from chatbot
                         response = chatbot.ask(prompt)
@@ -245,61 +262,20 @@ if prompt := st.chat_input("Ask about real estate projects..."):
                             "role": "assistant",
                             "content": response['final_answer'],
                             "model": chatbot.model_id,
-                            "model_display": model_name,
+                            "model_display": model_display,
                             "sql_query": response.get('sql_query', '')
                         })
 
                     except Exception as e:
-                        error_msg = f"Error with {model_name}: {str(e)}"
+                        error_msg = f"Error with {model_display}: {str(e)}"
                         st.error(error_msg)
                         st.session_state.messages.append({
                             "role": "assistant",
                             "content": error_msg,
                             "model": chatbot.model_id,
-                            "model_display": model_name,
+                            "model_display": model_display,
                             "sql_query": ''
                         })
-    else:
-        # Single model response
-        chatbot = st.session_state.chatbot_qwen if "Qwen" in selected_model else st.session_state.chatbot_deepseek
-        model_display = selected_model
-
-        with st.chat_message("assistant"):
-            model_color = "qwen-badge" if "qwen" in selected_model.lower() else "deepseek-badge"
-            st.markdown(f'<div class="model-badge {model_color}">{model_display}</div>', unsafe_allow_html=True)
-
-            with st.spinner(f"Thinking with {selected_model}..."):
-                try:
-                    # Get response from chatbot
-                    response = chatbot.ask(prompt)
-
-                    # Display response
-                    st.markdown(response['final_answer'])
-
-                    # Show SQL query if it was a data query
-                    if response['query_type'] == 'data' and response.get('sql_query'):
-                        with st.expander("🔍 View SQL Query"):
-                            st.code(response['sql_query'], language="sql")
-
-                    # Store in session
-                    st.session_state.messages.append({
-                        "role": "assistant",
-                        "content": response['final_answer'],
-                        "model": chatbot.model_id,
-                        "model_display": model_display,
-                        "sql_query": response.get('sql_query', '')
-                    })
-
-                except Exception as e:
-                    error_msg = f"Error: {str(e)}"
-                    st.error(error_msg)
-                    st.session_state.messages.append({
-                        "role": "assistant",
-                        "content": error_msg,
-                        "model": chatbot.model_id,
-                        "model_display": model_display,
-                        "sql_query": ''
-                    })
 
 # Footer
 st.markdown("---")
